@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BrewBot - Coffee Shop Assistant</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    
+    @keyframes float { 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-10px);} }
+    .floating { animation: float 3s ease-in-out infinite; }
+    .chat-bg { background-image: url('https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?ixlib=rb-4.0.3&auto=format&fit=crop&w=1470&q=80'); background-size: cover; background-position: center; background-blend-mode: overlay; background-color: rgba(245,238,230,0.85); }
+    .bot-message { border-radius: 18px 18px 18px 4px; background-color: #6F4E37; color: #fff; }
+    .user-message { border-radius: 18px 18px 4px 18px; background-color: #C4A484; color: #2b2b2b; }
+    .message { transform-origin: bottom; animation: messageAppear 0.28s ease-out; }
+    @keyframes messageAppear { from { transform: scale(0.96); opacity: 0;} to { transform: scale(1); opacity: 1;} }
+    .typing-dot { width:8px; height:8px; border-radius:50%; display:inline-block; background-color:#fff; opacity:0.4; }
+    .typing-dot:nth-child(1){ animation: typing 1s infinite; } .typing-dot:nth-child(2){ animation: typing 1s infinite 0.2s; } .typing-dot:nth-child(3){ animation: typing 1s infinite 0.4s; }
+    @keyframes typing { 0%,100%{ opacity:0.4; transform: translateY(0);} 50%{ opacity:1; transform: translateY(-5px);} }
+    .cart-panel { width: 340px; min-width: 260px; max-width: 90vw; }
+    .badge-soft { background: rgba(255,255,255,0.12); padding: 0.15rem 0.5rem; border-radius:999px; font-size:0.75rem;}
+    .toast { position: fixed; right: 20px; bottom: 20px; background: rgba(0,0,0,0.8); color: #fff; padding: 0.6rem 0.9rem; border-radius: 8px; z-index: 60; }
+    .hidden { display: none; }
+    @media (min-width: 1024px) { .layout-grid { display: grid; grid-template-columns: 1fr 360px; gap: 16px; } }
+  </style>
+</head>
+<body class="bg-amber-50 min-h-screen flex items-center justify-center p-6">
+  <div class="w-full max-w-6xl mx-auto">
+    
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center">
+        <div class="w-12 h-12 rounded-full bg-amber-800 flex items-center justify-center text-amber-50 mr-3 floating">
+          <i class="fas fa-mug-hot text-xl"></i>
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold text-amber-900">BrewBot</h1>
+          <p class="text-xs text-amber-700">Your coffee shop assistant</p>
+        </div>
+      </div>
+
+      
+      <div class="flex items-center gap-3">
+        <button id="clear-chat-btn" title="Clear chat" class="text-amber-700 hover:text-white hover:bg-amber-700 rounded-full p-2">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    </div>
+
+   
+    <div class="chat-bg rounded-2xl shadow-lg overflow-hidden layout-grid" style="min-height:520px;">
+      <!-- Chat column -->
+      <div class="flex flex-col p-4 bg-[rgba(255,255,255,0.04)]">
+        <div id="messages" class="flex-1 overflow-y-auto pr-2 space-y-3"></div>
+
+        <div id="typing-indicator" class="hidden px-4 pb-2">
+          <div class="bot-message text-white p-3 max-w-xs">
+            <div class="flex space-x-1"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>
+          </div>
+        </div>
+
+        <div class="p-4 border-t border-amber-200 bg-white">
+          <div class="flex items-center gap-3">
+            <input id="user-input" type="text" placeholder="Type your message (try: 'latte', 'today&#39;s specials', 'order 2 cappuccinos')" class="flex-1 bg-amber-50 rounded-full px-4 py-2 text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-300">
+            <button id="send-btn" class="ml-2 w-10 h-10 rounded-full bg-amber-600 text-white flex items-center justify-center hover:bg-amber-700 transition">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          </div>
+          <div class="flex justify-between mt-3 text-amber-600">
+            <div class="flex gap-2">
+              <button id="sugg-specials" class="text-xs bg-amber-100 px-3 py-1 rounded-full">Today's specials</button>
+              <button id="sugg-menu" class="text-xs bg-amber-100 px-3 py-1 rounded-full">Menu</button>
+            </div>
+            <div class="text-xs text-amber-500">Tip: use the menu on the right</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cart column -->
+      <div class="p-4 bg-white cart-panel border-l border-amber-100">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-amber-900">Menu & Cart</h3>
+          <div id="cart-badge" class="text-sm text-amber-600 badge-soft px-2 py-1 rounded">0 items</div>
+        </div>
+
+        <div class="mb-3">
+          <div id="menu-list" class="space-y-2 max-h-52 overflow-y-auto pr-2"></div>
+        </div>
+
+        <div class="border-t pt-3">
+          <div class="flex justify-between text-sm text-amber-700 mb-2">
+            <div>Subtotal</div>
+            <div id="subtotal">$0.00</div>
+          </div>
+          <div class="flex justify-between items-center gap-2">
+            <button id="export-btn" class="flex-1 bg-white border border-amber-300 px-3 py-2 rounded text-amber-700">Export</button>
+          </div>
+        </div>
+
+        <div class="mt-3 text-xs text-amber-500">
+          Tip: cart persists across reloads for demo.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
+  <div id="toast" class="toast hidden">Saved</div>
+
+  <script>
+  
+  const coffeeShop = {
+    hours: { weekdays: "7:00 AM - 8:00 PM", weekends: "8:00 AM - 9:00 PM" },
+    location: "123 Coffee Lane, Beanville",
+    menu: {
+      "Espresso": 3.50,
+      "Cappuccino": 4.50,
+      "Latte": 4.75,
+      "Americano": 3.75,
+      "Mocha": 5.00,
+      "Cold Brew": 4.25,
+      "Flat White": 4.50,
+      "Cortado": 4.00
+    },
+    specials: {
+      "Monday": "20% off all espresso drinks",
+      "Tuesday": "Free pastry with any large coffee",
+      "Wednesday": "Half-price pour overs",
+      "Thursday": "Buy one get one free cold brew",
+      "Friday": "Happy hour 3-5PM: $1 off all drinks",
+      "Saturday": "Free latte art with any milk-based drink",
+      "Sunday": "Family day: Kids drink free"
+    },
+    veganOptions: [
+      "Oat milk (+$0.75)",
+      "Almond milk (+$0.75)",
+      "Soy milk (+$0.50)",
+      "Coconut milk (+$0.75)",
+      "Vegan pastries available"
+    ]
+  };
+
+  const intents = [
+    { name: "greeting", patterns: [/^\s*(hi|hello|hey|yo)\b/i], reply: "Hello! Welcome to Brew Haven. How can I help?" },
+    { name: "hours", patterns: [/\b(hour|open|close|when)\b/i], reply: () => `Our opening hours are:\nWeekdays: ${coffeeShop.hours.weekdays}\nWeekends: ${coffeeShop.hours.weekends}` },
+    { name: "specials", patterns: [/\b(special|deal|promo|offer)\b/i], reply: () => {
+        const today = new Date().toLocaleString('en-us', { weekday: 'long' });
+        return `Today is ${today}! Our special is: ${coffeeShop.specials[today] || 'No special today.'}`;
+    }},
+    { name: "menu", patterns: [/\b(menu|drink|order|what do you have)\b/i], reply: () => {
+        return "Menu:\n" + Object.entries(coffeeShop.menu).map(([k,v]) => `${k} — $${v.toFixed(2)}`).join("\n");
+    }},
+    { name: "vegan", patterns: [/\b(vegan|dairy-free|plant-based|oat milk|almond)\b/i], reply: () => coffeeShop.veganOptions.join("\n") },
+    { name: "location", patterns: [/\b(location|where|address|located)\b/i], reply: () => `We're at: ${coffeeShop.location}`},
+    { name: "order", patterns: [/\b(order|i want|add|buy|get)\b/i], reply: null }
+  ];
+
+  
+  const LS_KEYS = { chat: 'brewbot_chat_v1', cart: 'brewbot_cart_v1' };
+  let state = { chat: [], cart: {} };
+
+  
+  document.addEventListener('DOMContentLoaded', () => {
+    initMenu();
+    restoreState();
+    bindUI();
+    showWelcome();
+  });
+
+  function bindUI() {
+    document.getElementById('send-btn').addEventListener('click', sendMessage);
+    document.getElementById('export-btn').addEventListener('click', exportReceipt);
+    document.getElementById('clear-chat-btn').addEventListener('click', clearChat);
+    document.getElementById('sugg-specials').addEventListener('click', () => sendQuickMessage("What are today's specials?"));
+    document.getElementById('sugg-menu').addEventListener('click', () => sendQuickMessage("Show me the menu"));
+    document.getElementById('user-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
+  }
+
+  
+  function initMenu() {
+    const menuDiv = document.getElementById('menu-list');
+    menuDiv.innerHTML = '';
+    for (const [name, price] of Object.entries(coffeeShop.menu)) {
+      const card = document.createElement('div');
+      card.className = 'flex items-center justify-between p-2 rounded hover:bg-amber-50';
+      card.innerHTML = `
+        <div>
+          <div class="font-medium text-amber-900">${name}</div>
+          <div class="text-xs text-amber-600">$${price.toFixed(2)}</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="px-2 py-1 text-sm border rounded text-amber-700" onclick="decreaseItem('${escapeJs(name)}')">-</button>
+          <div id="qty-${escapeId(name)}" class="w-6 text-center text-sm">${state.cart[name]||0}</div>
+          <button class="px-2 py-1 text-sm bg-amber-600 text-white rounded" onclick="increaseItem('${escapeJs(name)}')">+</button>
+        </div>`;
+      menuDiv.appendChild(card);
+    }
+    refreshCartUI();
+  }
+
+  function escapeId(s) { return s.replace(/[^a-z0-9]/gi, '_'); }
+  function escapeJs(s) { return s.replace(/'/g, "\\'"); }
+
+  function increaseItem(name) { state.cart[name] = (state.cart[name] || 0) + 1; saveState(); refreshCartUI(); showToast(`${name} added`); }
+  function decreaseItem(name) { if (!state.cart[name]) return; state.cart[name]--; if (state.cart[name] <= 0) delete state.cart[name]; saveState(); refreshCartUI(); showToast(`Removed one ${name}`); }
+
+  function refreshCartUI() {
+    for (const name of Object.keys(coffeeShop.menu)) {
+      const el = document.getElementById('qty-' + escapeId(name));
+      if (el) el.textContent = state.cart[name] || 0;
+    }
+    const itemCount = Object.values(state.cart).reduce((a,b) => a + b, 0);
+    document.getElementById('cart-badge').textContent = `${itemCount} items`;
+    document.getElementById('subtotal').textContent = `$${calculateSubtotal().toFixed(2)}`;
+  }
+
+  function calculateSubtotal() {
+    return Object.entries(state.cart).reduce((sum, [name, qty]) => sum + (coffeeShop.menu[name] || 0) * qty, 0);
+  }
+
+  
+  function addMessage(text, sender = 'bot') {
+    const messagesDiv = document.getElementById('messages');
+    const wrapper = document.createElement('div');
+    wrapper.className = `message ${sender === 'user' ? 'user-message ml-auto text-right' : 'bot-message text-white'} p-3 max-w-xs`;
+    wrapper.style.whiteSpace = 'pre-wrap';
+    wrapper.textContent = text;
+    messagesDiv.appendChild(wrapper);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+    state.chat.push({ sender, text, ts: new Date().toISOString() });
+    saveState();
+  }
+
+  function showWelcome() {
+    if (!state.chat || state.chat.length === 0) {
+      addMessage("Hello there! ☕ I'm BrewBot. Try asking for the menu, specials, or say 'order 2 latte'.", "bot");
+    } else {
+      const messagesDiv = document.getElementById('messages');
+      messagesDiv.innerHTML = '';
+      for (const m of state.chat) {
+        const el = document.createElement('div');
+        el.className = `message ${m.sender === 'user' ? 'user-message ml-auto text-right' : 'bot-message text-white'} p-3 max-w-xs`;
+        el.style.whiteSpace = 'pre-wrap';
+        el.textContent = m.text;
+        messagesDiv.appendChild(el);
+      }
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+  }
+
+  function showTyping() { document.getElementById('typing-indicator').classList.remove('hidden'); }
+  function hideTyping() { document.getElementById('typing-indicator').classList.add('hidden'); }
+
+  
+  function processMessage(message) {
+    message = (message || '').trim();
+    const lower = message.toLowerCase();
+
+  
+    const orderMatch = lower.match(/(?:order|add|get|i want|buy)\s*(\d+)?\s*([a-z\s]+)?/i);
+    if (orderMatch) {
+      const qty = orderMatch[1] ? parseInt(orderMatch[1]) : 1;
+      const itemGuess = (orderMatch[2] || '').trim();
+      if (itemGuess) {
+        const matched = bestMenuMatch(itemGuess);
+        if (matched) {
+          for (let i = 0; i < qty; i++) increaseItem(matched);
+          addMessage(`Added ${qty} × ${matched} to your cart.`, 'bot');
+          return;
+        }
+      }
+    }
+
+    
+    for (const intent of intents) {
+      for (const p of intent.patterns) {
+        if (p.test(message)) {
+          if (intent.name === 'order') {
+            addMessage("Sure — what would you like to order? You can say e.g. '2 latte' or use the menu on the right.", 'bot');
+            return;
+          }
+          const resp = typeof intent.reply === 'function' ? intent.reply() : intent.reply;
+          addMessage(resp, 'bot');
+          return;
+        }
+      }
+    }
+
+    // quick fuzzy try: if user typed a likely item name, add it
+    const short = lower.split(/\s+/).slice(0,3).join(' ');
+    const match = bestMenuMatch(short);
+    if (match) {
+      increaseItem(match);
+      addMessage(`I added 1 × ${match} to your cart.`, 'bot');
+      return;
+    }
+
+    
+    addMessage("I didn't catch that. Try: 'menu', 'today's specials', or 'order 2 latte'.", 'bot');
+  }
+
+  function bestMenuMatch(text) {
+    if (!text) return null;
+    text = text.toLowerCase().replace(/[^\w\s]/g, '').trim();
+    const names = Object.keys(coffeeShop.menu);
+    // exact or includes
+    for (const n of names) {
+      if (n.toLowerCase() === text) return n;
+      if (n.toLowerCase().includes(text)) return n;
+    }
+    // token match
+    const tokens = text.split(/\s+/);
+    for (const n of names) {
+      const low = n.toLowerCase();
+      if (tokens.every(t => low.includes(t))) return n;
+    }
+    // prefix match
+    for (const n of names) {
+      if (n.toLowerCase().startsWith(text)) return n;
+    }
+    return null;
+  }
+
+ 
+  function sendMessage() {
+    const input = document.getElementById('user-input');
+    const txt = (input.value || '').trim();
+    if (!txt) return;
+    addMessage(txt, 'user');
+    input.value = '';
+    showTyping();
+    setTimeout(() => { hideTyping(); processMessage(txt); }, 700 + Math.random() * 900);
+  }
+
+  function sendQuickMessage(msg) {
+    addMessage(msg, 'user');
+    showTyping();
+    setTimeout(() => { hideTyping(); processMessage(msg); }, 700 + Math.random() * 900);
+  }
+
+ 
+  function exportReceipt() {
+    if (!state.cart || Object.keys(state.cart).length === 0) {
+      // export chat
+      const csv = 'sender,message,timestamp\n' + state.chat.map(r => `${r.sender},"${(r.text||'').replace(/"/g,'""')}",${r.ts}`).join('\n');
+      downloadBlob(csv, 'brewbot_chat.csv', 'text/csv');
+      showToast('Chat exported');
+      return;
+    }
+    // export cart receipt
+    const rows = [['item','qty','unit_price','total']];
+    for (const [k, v] of Object.entries(state.cart)) {
+      const unit = coffeeShop.menu[k] || 0;
+      rows.push([k, v, unit.toFixed(2), (unit * v).toFixed(2)]);
+    }
+    rows.push(['', '', 'Subtotal', calculateSubtotal().toFixed(2)]);
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    downloadBlob(csv, 'brewbot_receipt.csv', 'text/csv');
+    showToast('Receipt exported');
+  }
+
+  function downloadBlob(content, filename, mime) {
+    const blob = new Blob([content], { type: mime || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+ 
+  function clearChat() {
+  if (!confirm('Clear chat history? This will not remove your cart.')) return;
+  
+  // Reset state
+  state.chat = [];
+  saveState();
+  
+  
+  const messagesDiv = document.getElementById('messages');
+  messagesDiv.innerHTML = "";
+  
+  
+  addMessage("Hello there! ☕ I'm BrewBot. Try asking for the menu, specials, or say 'order 2 latte'.","bot");
+  
+  showToast('Chat cleared');
+}
+
+  
+  let toastTimer = null;
+  function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.add('hidden'), 2000);
+  }
+
+  function saveState() {
+    try {
+      localStorage.setItem(LS_KEYS.chat, JSON.stringify(state.chat || []));
+      localStorage.setItem(LS_KEYS.cart, JSON.stringify(state.cart || {}));
+    } catch (e) {
+      console.warn('Could not save state', e);
+    }
+  }
+
+  function restoreState() {
+    try {
+      const c = JSON.parse(localStorage.getItem(LS_KEYS.chat) || '[]');
+      const cart = JSON.parse(localStorage.getItem(LS_KEYS.cart) || '{}');
+      state.chat = Array.isArray(c) ? c : [];
+      state.cart = cart || {};
+      showWelcome();
+      refreshCartUI();
+    } catch (e) {
+      console.warn('Could not restore state', e);
+    }
+  }
+  </script>
+</body>
+</html>
